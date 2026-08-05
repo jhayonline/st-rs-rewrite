@@ -317,7 +317,7 @@ impl Model {
         user_id: i32,
         params: &UpdateProfileParams,
     ) -> ModelResult<Self> {
-        let mut user = Entity::find_by_id(user_id).one(db).await?;
+        let user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
@@ -336,7 +336,7 @@ impl Model {
         user_id: i32,
         params: &UpdateMembershipParams,
     ) -> ModelResult<Self> {
-        let mut user = Entity::find_by_id(user_id).one(db).await?;
+        let user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
@@ -352,7 +352,7 @@ impl Model {
         user_id: i32,
         status: &str,
     ) -> ModelResult<Self> {
-        let mut user = Entity::find_by_id(user_id).one(db).await?;
+        let user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
@@ -366,7 +366,7 @@ impl Model {
         user_id: i32,
         role: &str,
     ) -> ModelResult<Self> {
-        let mut user = Entity::find_by_id(user_id).one(db).await?;
+        let user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
@@ -380,7 +380,7 @@ impl Model {
         user_id: i32,
         url: &str,
     ) -> ModelResult<Self> {
-        let mut user = Entity::find_by_id(user_id).one(db).await?;
+        let user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
@@ -390,37 +390,21 @@ impl Model {
     }
 
 
-    pub fn is_approved(&self) -> bool {
-        self.status == "approved"
-    }
+    pub fn is_approved(&self) -> bool { self.status == "approved" }
 
-    pub fn is_pending(&self) -> bool {
-        self.status == "pending"
-    }
+    pub fn is_pending(&self) -> bool { self.status == "pending" }
 
-    pub fn is_rejected(&self) -> bool {
-        self.status == "rejected"
-    }
+    pub fn is_rejected(&self) -> bool { self.status == "rejected" }
 
-    pub fn is_suspended(&self) -> bool {
-        self.status == "suspended"
-    }
+    pub fn is_suspended(&self) -> bool { self.status == "suspended" }
 
-    pub fn is_mentor(&self) -> bool {
-        self.role == "Mentor"
-    }
+    pub fn is_mentor(&self) -> bool { self.role == "Mentor" }
 
-    pub fn is_mentee(&self) -> bool {
-        self.role == "Mentee"
-    }
+    pub fn is_mentee(&self) -> bool { self.role == "Mentee" }
 
-    pub fn is_admin(&self) -> bool {
-        self.role == "Admin"
-    }
+    pub fn is_admin(&self) -> bool { self.role == "Admin" }
 
-    pub fn has_active_membership(&self) -> bool {
-        self.membership_paid
-    }
+    pub fn has_active_membership(&self) -> bool { self.membership_paid }
 
     pub fn needs_payment(&self) -> bool {
         self.membership_enabled && !self.membership_paid
