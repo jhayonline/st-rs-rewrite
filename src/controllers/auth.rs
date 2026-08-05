@@ -2,7 +2,7 @@ use crate::{
     mailers::auth::AuthMailer,
     models::{
         _entities::users,
-        users::{LoginParams, RegisterParams},
+        users::{LoginParams, RegisterParams, UpdateProfileParams},
     },
     views::auth::{CurrentResponse, LoginResponse},
 };
@@ -22,6 +22,12 @@ fn get_allow_email_domain_re() -> &'static Regex {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ForgotParams {
     pub email: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ChangePasswordParams {
+    pub current_password: String,
+    pub new_password: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -57,7 +63,12 @@ async fn register(
                 user_email = &params.email,
                 "could not register user",
             );
-            return format::json(());
+
+            if err.to_string().contains("already exists") {
+                return bad_request("Email already registered");
+            }
+
+            return bad_request("Registration failed");
         }
     };
 
@@ -149,6 +160,17 @@ async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -
         return unauthorized("unauthorized!");
     }
 
+    if user.status != "approved" {
+        let status = user.status.clone();
+
+        return match status.as_str() {
+            "pending" => unauthorized("Account pending approval"),
+            "rejected" => unauthorized("Account rejected"),
+            "suspended" => unauthorized("Account suspended"),
+            _ => unauthorized("Account not approved"),
+        };
+    }
+
     let jwt_secret = ctx.config.get_jwt_config()?;
 
     let token = user
@@ -156,6 +178,127 @@ async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -
         .or_else(|_| unauthorized("unauthorized!"))?;
 
     format::json(LoginResponse::new(&user, &token))
+}
+
+#[debug_handler]
+async fn mentor_login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -> Result<Response> {
+    let Ok(user) = users::Model::find_by_email(&ctx.db, &params.email).await else {
+        tracing::debug!(
+            email = params.email,
+            "mentor login attempt with non-existent email"
+        );
+        return unauthorized("Invalid credentials!");
+    };
+
+    let valid = user.verify_password(&params.password);
+
+    if !valid {
+        return unauthorized("unauthorized!");
+    }
+
+    if !user.is_mentor() {
+        return unauthorized("This login is for mentors only. Please use the appropriate login page.");
+    }
+
+    if user.status != "approved" {
+        let status = user.status.clone();
+
+        return match status.as_str() {
+            "pending" => unauthorized("Account pending approval"),
+            "rejected" => unauthorized("Account rejected"),
+            "suspended" => unauthorized("Account suspended"),
+            _ => unauthorized("Account not approved"),
+        };
+    }
+
+    let jwt_secret = ctx.config.get_jwt_config()?;
+
+    let token = user
+        .generate_jwt(&jwt_secret.secret, jwt_secret.expiration)
+        .or_else(|_| unauthorized("unauthorized!"))?;
+
+    format::json(LoginResponse::new(&user, &token))
+}
+
+#[debug_handler]
+async fn admin_login(
+    State(ctx): State<AppContext>,
+    Json(params): Json<LoginParams>,
+) -> Result<Response> {
+    let Ok(user) = users::Model::find_by_email(&ctx.db, &params.email).await else {
+        tracing::debug!(
+            email = params.email,
+            "admin login attempt with non-existent email"
+        );
+        return unauthorized("Invalid credentials!");
+    };
+
+    let valid = user.verify_password(&params.password);
+
+    if !valid {
+        return unauthorized("unauthorized!");
+    }
+
+    // Check if user is an admin
+    if !user.is_admin() {
+        return unauthorized("Access denied. Admin privileges required.");
+    }
+
+    // Check account status
+    if user.status != "approved" {
+        let status = user.status.clone();
+        return match status.as_str() {
+            "pending" => unauthorized("Account pending approval"),
+            "rejected" => unauthorized("Account rejected"),
+            "suspended" => unauthorized("Account suspended"),
+            _ => unauthorized("Account not approved"),
+        };
+    }
+
+    let jwt_secret = ctx.config.get_jwt_config()?;
+
+    let token = user
+        .generate_jwt(&jwt_secret.secret, jwt_secret.expiration)
+        .or_else(|_| unauthorized("unauthorized!"))?;
+
+    format::json(LoginResponse::new(&user, &token))
+}
+
+#[debug_handler]
+async fn change_password(
+    auth: auth::JWT,
+    State(ctx): State<AppContext>,
+    Json(params): Json<ChangePasswordParams>,
+) -> Result<Response> {
+    let user = users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+
+    // Verify current password
+    if !user.verify_password(&params.current_password) {
+        return unauthorized("Current password is incorrect");
+    }
+
+    // Update to new password
+    let active_model = user.into_active_model();
+    active_model.reset_password(&ctx.db, &params.new_password).await?;
+
+    format::json(())
+}
+
+#[debug_handler]
+async fn update_profile(
+    auth: auth::JWT,
+    State(ctx): State<AppContext>,
+    Json(params): Json<UpdateProfileParams>,
+) -> Result<Response> {
+    let user = users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+
+    let updated_user = users::Model::update_profile(
+        &ctx.db,
+        user.id,
+        &params,
+    ).await?;
+
+    format::json(CurrentResponse::new(&updated_user))
 }
 
 #[debug_handler]
@@ -264,9 +407,13 @@ pub fn routes() -> Routes {
         .add("/register", post(register))
         .add("/verify/{token}", get(verify))
         .add("/login", post(login))
+        .add("/mentor-login", post(mentor_login))
+        .add("/admin-login", post(admin_login))
         .add("/forgot", post(forgot))
         .add("/reset", post(reset))
         .add("/current", get(current))
+        .add("/change-password", post(change_password))
+        .add("/update-profile", post(update_profile))
         .add("/magic-link", post(magic_link))
         .add("/magic-link/{token}", get(magic_link_verify))
         .add("/resend-verification-mail", post(resend_verification_email))
