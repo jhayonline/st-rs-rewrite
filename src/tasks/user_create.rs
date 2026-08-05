@@ -11,7 +11,7 @@ impl Task for UserCreate {
     fn task(&self) -> TaskInfo {
         TaskInfo {
             name: "user:create".to_string(),
-            detail: "Create a new user with email, name, and password. Sends welcome email and sets up email verification.\nUsage:\ncargo run task user:create email:user@example.com name:\"John Doe\" password:\"securepassword\"".to_string(),
+            detail: "Create a new user with email, name, password, membership category, and role. Sends welcome email and sets up email verification.\nUsage:\ncargo run task user:create email:user@example.com name:\"John Doe\" password:\"securepassword\" membership_category:Student role:Mentee career_path:\"Software Engineering\" specialization:\"Rust\"".to_string(),
         }
     }
     async fn run(&self, app_context: &AppContext, vars: &task::Vars) -> Result<()> {
@@ -24,11 +24,27 @@ impl Task for UserCreate {
         let password = vars
             .cli_arg("password")
             .map_err(|_| Error::string("password is mandatory"))?;
+        let membership_category = vars
+            .cli_arg("membership_category")
+            .unwrap_or("Student");
+        let role = vars
+            .cli_arg("role")
+            .unwrap_or("Mentee");
+        let career_path = vars
+            .cli_arg("career_path")
+            .ok();
+        let specialization = vars
+            .cli_arg("specialization")
+            .ok();
 
         let register_params = RegisterParams {
             email: email.to_owned(),
             password: password.to_owned(),
             name: name.to_owned(),
+            membership_category: membership_category.to_owned(),
+            role: Some(role.to_owned()),
+            career_path: career_path.map(|s| s.to_owned()),
+            specialization: specialization.map(|s| s.to_owned()),
         };
 
         // Create user with password using the same logic as register controller
@@ -91,6 +107,8 @@ impl Task for UserCreate {
         println!("   Email: {}", user.email);
         println!("   Name: {}", user.name);
         println!("   PID: {}", user.pid);
+        println!("   Role: {}", user.role);
+        println!("   Membership Category: {}", user.membership_category);
 
         Ok(())
     }
