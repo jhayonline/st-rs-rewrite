@@ -1,13 +1,9 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{QueryOrder, TransactionTrait};  // Add TransactionTrait here!
+use sea_orm::{QueryOrder, TransactionTrait};
 use serde::{Deserialize, Serialize};
 
 pub use super::_entities::lessons::{ActiveModel, Entity, Model};
 pub type Lessons = Entity;
-
-// ============================================================
-// DTOs
-// ============================================================
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateLessonParams {
@@ -32,10 +28,6 @@ pub struct ReorderLessonsParams {
     pub lesson_ids: Vec<i32>,
 }
 
-// ============================================================
-// ActiveModelBehavior
-// ============================================================
-
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {
     async fn before_save<C>(self, _db: &C, insert: bool) -> std::result::Result<Self, DbErr>
@@ -52,17 +44,11 @@ impl ActiveModelBehavior for ActiveModel {
     }
 }
 
-// ============================================================
-// Model Implementation (Read operations)
-// ============================================================
-
 impl Model {
-    /// Find lesson by ID
     pub async fn find_by_id(db: &DatabaseConnection, id: i32) -> Result<Option<Self>, DbErr> {
         Entity::find_by_id(id).one(db).await
     }
 
-    /// Find all lessons for a course, ordered by order_index
     pub async fn find_by_course(db: &DatabaseConnection, course_id: i32) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .filter(super::_entities::lessons::Column::CourseId.eq(course_id))
@@ -71,7 +57,6 @@ impl Model {
             .await
     }
 
-    /// Find active lessons for a course
     pub async fn find_active_by_course(
         db: &DatabaseConnection,
         course_id: i32,
@@ -84,7 +69,6 @@ impl Model {
             .await
     }
 
-    /// Find lessons by mentor
     pub async fn find_by_mentor(db: &DatabaseConnection, mentor_id: i32) -> Result<Vec<Self>, DbErr> {
         Entity::find()
             .filter(super::_entities::lessons::Column::MentorId.eq(mentor_id))
@@ -108,17 +92,11 @@ impl Model {
     }
 }
 
-// ============================================================
-// ActiveModel Implementation (Write operations)
-// ============================================================
-
 impl ActiveModel {
-    /// Create a new lesson
     pub async fn create(
         db: &DatabaseConnection,
         params: &CreateLessonParams,
     ) -> Result<Model, DbErr> {
-        // Verify course exists and get mentor_id
         use crate::models::_entities::courses;
         
         let course = courses::Entity::find_by_id(params.course_id)
@@ -146,7 +124,6 @@ impl ActiveModel {
         Ok(lesson)
     }
 
-    /// Update an existing lesson
     pub async fn update(
         db: &DatabaseConnection,
         lesson_id: i32,
@@ -177,7 +154,6 @@ impl ActiveModel {
         Ok(updated_lesson)
     }
 
-    /// Update lesson status
     pub async fn update_status(
         db: &DatabaseConnection,
         lesson_id: i32,
@@ -193,12 +169,12 @@ impl ActiveModel {
         Ok(updated_lesson)
     }
 
-    /// Delete a lesson (soft delete - set status to archived)
+    /// Soft delete 
     pub async fn delete(db: &DatabaseConnection, lesson_id: i32) -> Result<Model, DbErr> {
         Self::update_status(db, lesson_id, "archived").await
     }
 
-    /// Hard delete a lesson (permanent)
+    /// Hard delete
     pub async fn hard_delete(db: &DatabaseConnection, lesson_id: i32) -> Result<(), DbErr> {
         let lesson = Model::find_by_id(db, lesson_id).await?;
         let lesson = lesson.ok_or(DbErr::RecordNotFound("Lesson not found".to_string()))?;
@@ -214,19 +190,16 @@ impl ActiveModel {
         course_id: i32,
         lesson_ids: Vec<i32>,
     ) -> Result<Vec<Model>, DbErr> {
-        // Start a transaction
         let txn = db.begin().await?;
 
         // Update each lesson's order_index
         for (index, lesson_id) in lesson_ids.iter().enumerate() {
-            // Use Entity directly instead of Model::find_by_id
             let lesson = Entity::find_by_id(*lesson_id)
                 .one(&txn)
                 .await?;
             
             let lesson = lesson.ok_or(DbErr::RecordNotFound("Lesson not found".to_string()))?;
 
-            // Verify lesson belongs to this course
             if lesson.course_id != course_id {
                 return Err(DbErr::RecordNotUpdated);
             }
@@ -242,10 +215,6 @@ impl ActiveModel {
         Model::find_by_course(db, course_id).await
     }
 }
-
-// ============================================================
-// Entity Implementation (Custom finders/selectors)
-// ============================================================
 
 impl Entity {
     /// Find lessons with course information
