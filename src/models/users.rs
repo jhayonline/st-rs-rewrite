@@ -22,6 +22,36 @@ pub struct RegisterParams {
     pub email: String,
     pub password: String,
     pub name: String,
+    pub membership_category: String, // studet, professional, volunteer
+    pub role: Option<String>, // mentee or mentor
+    pub career_path: Option<String>,
+    pub specialization: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UpdateProfileParams {
+    pub name: Option<String>,
+    pub career_path: Option<String>,
+    pub specialization: Option<String>,
+    pub community_link: Option<String>,
+    pub contract_file_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UpdateMembershipParams {
+    pub membership_paid: bool,
+    pub payment_reference: Option<String>,
+    pub payment_date: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UpdateStatusParams {
+    pub status: String, // pending, approved, rejected, suspended
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UpdateRoleParams {
+    pub role: String, // admin, mentor, mentee
 }
 
 #[derive(Debug, Validate, Deserialize)]
@@ -30,6 +60,10 @@ pub struct Validator {
     pub name: String,
     #[validate(email(message = "invalid email"))]
     pub email: String,
+    #[validate(length(min = 1, message = "Role is required"))]
+    pub role: String,
+    #[validate(length(min = 1, message = "Memebership category is required"))]
+    pub membership_category: String,
 }
 
 impl Validatable for ActiveModel {
@@ -37,6 +71,8 @@ impl Validatable for ActiveModel {
         Box::new(Validator {
             name: self.name.as_ref().to_owned(),
             email: self.email.as_ref().to_owned(),
+            role: self.role.as_ref().to_owned(),
+            membership_category: self.membership_category.as_ref().to_owned(),
         })
     }
 }
@@ -48,14 +84,16 @@ impl ActiveModelBehavior for super::_entities::users::ActiveModel {
         C: ConnectionTrait,
     {
         self.validate()?;
+
+        let mut this = self;
+
         if insert {
-            let mut this = self;
             this.pid = ActiveValue::Set(Uuid::new_v4());
             this.api_key = ActiveValue::Set(format!("lo-{}", Uuid::new_v4()));
-            Ok(this)
-        } else {
-            Ok(self)
+            this.created_at = ActiveValue::Set(chrono::Utc::now().into());
         }
+        this.updated_at = ActiveValue::Set(chrono::Utc::now().into());
+        Ok(this)
     }
 }
 
@@ -197,6 +235,7 @@ impl Model {
         user.ok_or_else(|| ModelError::EntityNotFound)
     }
 
+
     /// finds a user by the provided api key
     ///
     /// # Errors
@@ -212,6 +251,45 @@ impl Model {
             .one(db)
             .await?;
         user.ok_or_else(|| ModelError::EntityNotFound)
+    }
+
+    pub async fn find_by_role(db: &DatabaseConnection, role: &str) -> ModelResult<Vec<Self>> {
+        let users = users::Entity::find()
+            .filter(users::Column::Role.eq(role))
+            .all(db)
+            .await?;
+
+        Ok(users)
+    }
+
+    pub async fn find_approved_mentors(db: &DatabaseConnection) -> ModelResult<Vec<Self>> {
+        let users = users::Entity::find()
+            .filter(users::Column::Role.eq("Mentor"))
+            .filter(users::Column::Status.eq("approved"))
+            .all(db)
+            .await?;
+
+        Ok(users)
+    }
+
+    pub async fn find_by_status(db: &DatabaseConnection, status: &str) -> ModelResult<Vec<Self>> {
+        let users = users::Entity::find()
+            .filter(users::Column::Status.eq(status))
+            .all(db)
+            .await?;
+        Ok(users)
+    }
+
+    pub async fn find_pending_users(db: &DatabaseConnection) -> ModelResult<Vec<Self>> {
+        Self::find_by_status(db, "pending").await
+    }
+
+    pub async fn find_membership_paid(db: &DatabaseConnection) -> ModelResult<Vec<Self>> {
+        let users = users::Entity::find()
+            .filter(users::Column::MembershipPaid.eq(true))
+            .all(db)
+            .await?;
+        Ok(users)
     }
 
     /// Verifies whether the provided plain password matches the hashed password
@@ -251,10 +329,20 @@ impl Model {
 
         let password_hash =
             hash::hash_password(&params.password).map_err(|e| ModelError::Any(e.into()))?;
+
+        let role = params.role.clone().unwrap_or_else(|| "Mentee".to_string());
+
         let user = users::ActiveModel {
             email: ActiveValue::set(params.email.clone()),
             password: ActiveValue::set(password_hash),
             name: ActiveValue::set(params.name.clone()),
+            role: ActiveValue::set(role.clone()),
+            membership_category: ActiveValue::set(params.membership_category.clone()),
+            career_path: ActiveValue::set(params.career_path.clone()),
+            specialization: ActiveValue::set(params.specialization.clone()),
+            status: ActiveValue::set("pending".to_string()),
+            membership_enabled: ActiveValue::set(role == "Mentee" || role == "Mentor"),
+            membership_paid: ActiveValue::set(false),
             ..Default::default()
         }
         .insert(&txn)
@@ -263,6 +351,135 @@ impl Model {
         txn.commit().await?;
 
         Ok(user)
+    }
+
+    pub async fn update_profile(
+        db: &DatabaseConnection,
+        user_id: i32,
+        params: &UpdateProfileParams,
+    ) -> ModelResult<Self> {
+        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
+
+        let mut active_model: ActiveModel = user.into();
+
+        if let Some(name) = &params.name { active_model.name = ActiveValue::set(name.clone()); }
+        if let Some(career_path) = &params.career_path { active_model.career_path = ActiveValue::set(Some(career_path.clone())); }
+        if let Some(specialization) = &params.specialization { active_model.specialization = ActiveValue::set(Some(specialization.clone())); }
+        if let Some(community_link) = &params.community_link { active_model.community_link = ActiveValue::set(Some(community_link.clone())); }
+        if let Some(contract_file_url) = &params.contract_file_url { active_model.contract_file_url = ActiveValue::set(Some(contract_file_url.clone())); }
+
+        active_model.update(db).await.map_err(ModelError::from)
+    }
+
+    pub async fn update_membership(
+        db: &DatabaseConnection,
+        user_id: i32,
+        params: &UpdateMembershipParams,
+    ) -> ModelResult<Self> {
+        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
+
+        let mut active_model: ActiveModel = user.into();
+        active_model.membership_paid = ActiveValue::set(params.membership_paid);
+        active_model.payment_reference = ActiveValue::set(params.payment_reference.clone());
+        active_model.payment_date = ActiveValue::set(params.payment_date);
+
+        active_model.update(db).await.map_err(ModelError::from)
+    }
+
+    pub async fn update_status(
+        db: &DatabaseConnection,
+        user_id: i32,
+        status: &str,
+    ) -> ModelResult<Self> {
+        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
+
+        let mut active_model: ActiveModel = user.into();
+        active_model.status = ActiveValue::set(status.to_string());
+
+        active_model.update(db).await.map_err(ModelError::from)
+    }
+
+    pub async fn update_role(
+        db: &DatabaseConnection,
+        user_id: i32,
+        role: &str,
+    ) -> ModelResult<Self> {
+        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
+
+        let mut active_model: ActiveModel = user.into();
+        active_model.role = ActiveValue::set(role.to_string());
+
+        active_model.update(db).await.map_err(ModelError::from)
+    }
+
+    pub async fn update_contract_file(
+        db: &DatabaseConnection,
+        user_id: i32,
+        url: &str,
+    ) -> ModelResult<Self> {
+        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
+
+        let mut active_model: ActiveModel = user.into();
+        active_model.contract_file_url = ActiveValue::set(Some(url.to_string()));
+
+        active_model.update(db).await.map_err(ModelError::from)
+    }
+
+
+    pub fn is_approved(&self) -> bool {
+        self.status == "approved"
+    }
+
+    /// Check if user is pending
+    pub fn is_pending(&self) -> bool {
+        self.status == "pending"
+    }
+
+    /// Check if user is rejected
+    pub fn is_rejected(&self) -> bool {
+        self.status == "rejected"
+    }
+
+    /// Check if user is suspended
+    pub fn is_suspended(&self) -> bool {
+        self.status == "suspended"
+    }
+
+    /// Check if user is a mentor
+    pub fn is_mentor(&self) -> bool {
+        self.role == "Mentor"
+    }
+
+    pub fn is_mentee(&self) -> bool {
+        self.role == "Mentee"
+    }
+
+    /// Check if user is an admin
+    pub fn is_admin(&self) -> bool {
+        self.role == "Admin"
+    }
+
+    /// Check if user has active membership
+    pub fn has_active_membership(&self) -> bool {
+        self.membership_paid
+    }
+
+    /// Check if user needs to pay for membership
+    pub fn needs_payment(&self) -> bool {
+        self.membership_enabled && !self.membership_paid
+    }
+
+    pub fn get_membership_amount(&self) -> Option<f64> {
+        self.membership_amount.map(|d| {
+            d.to_string()
+                .parse::<f64>()
+                .unwrap_or(30.00)
+        })
     }
 
     /// Creates a JWT
