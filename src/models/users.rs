@@ -41,7 +41,7 @@ pub struct UpdateProfileParams {
 pub struct UpdateMembershipParams {
     pub membership_paid: bool,
     pub payment_reference: Option<String>,
-    pub payment_date: Option<chrono::DateTime<chrono::Utc>>,
+    pub payment_date: Option<chrono::DateTime<chrono::FixedOffset>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
