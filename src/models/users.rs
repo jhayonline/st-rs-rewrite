@@ -358,7 +358,7 @@ impl Model {
         user_id: i32,
         params: &UpdateProfileParams,
     ) -> ModelResult<Self> {
-        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let mut user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
@@ -377,7 +377,7 @@ impl Model {
         user_id: i32,
         params: &UpdateMembershipParams,
     ) -> ModelResult<Self> {
-        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let mut user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
@@ -393,7 +393,7 @@ impl Model {
         user_id: i32,
         status: &str,
     ) -> ModelResult<Self> {
-        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let mut user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
@@ -407,7 +407,7 @@ impl Model {
         user_id: i32,
         role: &str,
     ) -> ModelResult<Self> {
-        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let mut user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
@@ -421,7 +421,7 @@ impl Model {
         user_id: i32,
         url: &str,
     ) -> ModelResult<Self> {
-        let mut user = Self::find_by_id(user_id).one(db).await?;
+        let mut user = Entity::find_by_id(user_id).one(db).await?;
         let user = user.ok_or_else(|| ModelError::EntityNotFound)?;
 
         let mut active_model: ActiveModel = user.into();
