@@ -18,3 +18,9 @@ target/
 
 *.sqlite
 *.sqlite-*
+
+yyy.md
+xxx.md
+zzz.md
+
+.env
