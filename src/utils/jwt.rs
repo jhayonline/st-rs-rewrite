@@ -1,13 +1,11 @@
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-use crate::config::Config;
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub sub: String, // User ID (UUID)
+    pub sub: String,
     pub email: String,
     pub role: String,
     pub exp: usize,
@@ -35,7 +33,7 @@ pub fn generate_token(
     claims: &Claims,
     secret: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    encode(
+    jsonwebtoken::encode(
         &Header::default(),
         claims,
         &EncodingKey::from_secret(secret.as_bytes()),
@@ -43,7 +41,7 @@ pub fn generate_token(
 }
 
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
-    decode::<Claims>(
+    jsonwebtoken::decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),
         &Validation::default(),
@@ -51,7 +49,6 @@ pub fn verify_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::e
     .map(|data| data.claims)
 }
 
-// Helper to extract token from Authorization header
 pub fn extract_token(auth_header: Option<&str>) -> Option<String> {
     auth_header
         .and_then(|header| header.strip_prefix("Bearer "))

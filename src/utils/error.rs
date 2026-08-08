@@ -47,8 +47,10 @@ impl ApiError {
     }
 }
 
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
+// Implement Writer for ApiError - match the exact signature
+#[async_trait]
+impl Writer for ApiError {
+    async fn write(mut self, _req: &mut Request, _depot: &mut Depot, res: &mut Response) {
         let status_code = match self.error.as_str() {
             "Bad Request" => StatusCode::BAD_REQUEST,
             "Unauthorized" => StatusCode::UNAUTHORIZED,
@@ -57,8 +59,8 @@ impl IntoResponse for ApiError {
             "Conflict" => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
-
-        Response::builder(status_code).json(&self).build()
+        res.status_code(status_code);
+        res.render(Json(self));
     }
 }
 
@@ -70,7 +72,6 @@ impl fmt::Display for ApiError {
 
 impl std::error::Error for ApiError {}
 
-// Convert from sea_orm errors
 impl From<sea_orm::DbErr> for ApiError {
     fn from(err: sea_orm::DbErr) -> Self {
         match err {
@@ -81,7 +82,6 @@ impl From<sea_orm::DbErr> for ApiError {
     }
 }
 
-// Convert from serde_json errors
 impl From<serde_json::Error> for ApiError {
     fn from(err: serde_json::Error) -> Self {
         ApiError::bad_request("Invalid JSON").with_details(err.to_string())

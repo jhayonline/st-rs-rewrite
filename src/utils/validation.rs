@@ -1,5 +1,4 @@
 use regex::Regex;
-use validator::{Validate, ValidationError};
 
 pub fn validate_email(email: &str) -> bool {
     let email_regex = Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$").unwrap();

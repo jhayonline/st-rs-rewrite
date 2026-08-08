@@ -1,5 +1,6 @@
 mod config;
 mod controllers;
+mod entities;
 mod middleware;
 mod models;
 mod services;
@@ -7,7 +8,6 @@ mod utils;
 
 use config::Config;
 use middleware::cors::cors_handler;
-use salvo::logging::Logger;
 use salvo::prelude::*;
 use utils::logging::init_logging;
 

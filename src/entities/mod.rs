@@ -1,12 +1,12 @@
-pub mod announcements;
-pub mod contract_files;
 pub mod course_enrollments;
 pub mod courses;
-pub mod email_queue;
 pub mod lesson_progress;
 pub mod lessons;
 pub mod mentor_mentee_relationships;
-pub mod messages;
 pub mod task_submissions;
 pub mod tasks;
 pub mod users;
+// pub mod messages;
+// pub mod announcements;
+// pub mod contract_files;
+// pub mod email_queue;

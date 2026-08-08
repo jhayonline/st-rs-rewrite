@@ -12,5 +12,5 @@ pub fn init_logging() {
         .with_line_number(true)
         .finish();
 
-    subscriber.init();
+    let _ = subscriber.try_init();
 }
