@@ -7,3 +7,4 @@ pub mod services;
 pub mod utils;
 
 pub use entities::*;
+pub use migration;

@@ -47,7 +47,6 @@ impl ApiError {
     }
 }
 
-// Implement Writer for ApiError - match the exact signature
 #[async_trait]
 impl Writer for ApiError {
     async fn write(mut self, _req: &mut Request, _depot: &mut Depot, res: &mut Response) {
@@ -85,5 +84,32 @@ impl From<sea_orm::DbErr> for ApiError {
 impl From<serde_json::Error> for ApiError {
     fn from(err: serde_json::Error) -> Self {
         ApiError::bad_request("Invalid JSON").with_details(err.to_string())
+    }
+}
+
+impl From<salvo::http::ParseError> for ApiError {
+    fn from(err: salvo::http::ParseError) -> Self {
+        ApiError::bad_request("Invalid request body").with_details(err.to_string())
+    }
+}
+
+impl From<bcrypt::BcryptError> for ApiError {
+    fn from(err: bcrypt::BcryptError) -> Self {
+        ApiError::internal_error("Password processing error").with_details(err.to_string())
+    }
+}
+
+// Add this for JWT errors
+impl From<jsonwebtoken::errors::Error> for ApiError {
+    fn from(err: jsonwebtoken::errors::Error) -> Self {
+        match err.kind() {
+            jsonwebtoken::errors::ErrorKind::InvalidToken => {
+                ApiError::unauthorized("Invalid token").with_details(err.to_string())
+            }
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
+                ApiError::unauthorized("Token expired").with_details(err.to_string())
+            }
+            _ => ApiError::unauthorized("Authentication error").with_details(err.to_string()),
+        }
     }
 }
