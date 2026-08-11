@@ -3,6 +3,7 @@ pub mod auth;
 pub mod course;
 pub mod enrollment;
 pub mod lesson;
+pub mod mentor;
 pub mod mentor_mentee;
 pub mod submission;
 pub mod task;

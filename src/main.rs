@@ -12,6 +12,11 @@ use controllers::admin::{
     update_mentor_assignments, update_user,
 };
 use controllers::auth::{login, me, signup};
+use controllers::mentor::{
+    create_course, create_lesson, create_task, delete_lesson, delete_task, enroll_mentees,
+    get_assigned_mentees, get_course_detail, get_courses, get_dashboard, get_mentee_detail,
+    get_submissions, review_submission, update_course_status, update_lesson, update_task,
+};
 use controllers::user::{change_password, get_profile, update_profile};
 use middleware::auth::{AuthMiddleware, RequireRole};
 use middleware::cors::cors_handler;
@@ -42,20 +47,19 @@ async fn main() {
 
     let db = Arc::new(db_connection);
 
-    // Create the router
     let router = Router::new()
         .hoop(cors_handler())
         .hoop(affix_state::inject(db.clone()))
         .hoop(affix_state::inject(config.clone()))
         .push(
             Router::with_path("api")
-                // public
+                // Public routes (no auth required)
                 .push(
                     Router::with_path("auth")
                         .push(Router::with_path("login").post(login))
                         .push(Router::with_path("signup").post(signup)),
                 )
-                // protected
+                // Protected user routes (auth required)
                 .push(
                     Router::with_path("auth")
                         .hoop(AuthMiddleware::new())
@@ -64,7 +68,7 @@ async fn main() {
                         .push(Router::with_path("profile").put(update_profile))
                         .push(Router::with_path("change-password").post(change_password)),
                 )
-                // admin
+                // Admin routes (auth + admin role required)
                 .push(
                     Router::with_path("admin")
                         .hoop(AuthMiddleware::new())
@@ -80,6 +84,35 @@ async fn main() {
                             Router::with_path("mentor-assignments/update")
                                 .put(update_mentor_assignments),
                         ),
+                )
+                // Mentor routes (auth + mentor role required)
+                .push(
+                    Router::with_path("mentor")
+                        .hoop(AuthMiddleware::new())
+                        .hoop(RequireRole::new(vec!["Mentor"]))
+                        // Courses
+                        .push(Router::with_path("courses").get(get_courses))
+                        .push(Router::with_path("courses/create").post(create_course))
+                        .push(Router::with_path("courses/detail").get(get_course_detail))
+                        .push(Router::with_path("courses/status").put(update_course_status))
+                        // Lessons
+                        .push(Router::with_path("lessons/create").post(create_lesson))
+                        .push(Router::with_path("lessons/update").put(update_lesson))
+                        .push(Router::with_path("lessons/delete").delete(delete_lesson))
+                        // Tasks
+                        .push(Router::with_path("tasks/create").post(create_task))
+                        .push(Router::with_path("tasks/update").put(update_task))
+                        .push(Router::with_path("tasks/delete").delete(delete_task))
+                        // Mentees
+                        .push(Router::with_path("mentees/assigned").get(get_assigned_mentees))
+                        .push(Router::with_path("mentees/detail").get(get_mentee_detail))
+                        // Enrollment
+                        .push(Router::with_path("enroll").post(enroll_mentees))
+                        // Submissions
+                        .push(Router::with_path("submissions").get(get_submissions))
+                        .push(Router::with_path("submissions/review").put(review_submission))
+                        // Dashboard
+                        .push(Router::with_path("dashboard").get(get_dashboard)),
                 )
                 .push(Router::with_path("hello").get(hello)),
         );
@@ -108,6 +141,22 @@ async fn main() {
     tracing::info!("  GET  /api/admin/mentors");
     tracing::info!("  GET  /api/admin/mentor-assignments");
     tracing::info!("  PUT  /api/admin/mentor-assignments/update");
+    tracing::info!("  GET  /api/mentor/courses");
+    tracing::info!("  POST /api/mentor/courses/create");
+    tracing::info!("  GET  /api/mentor/courses/detail");
+    tracing::info!("  PUT  /api/mentor/courses/status");
+    tracing::info!("  POST /api/mentor/lessons/create");
+    tracing::info!("  PUT  /api/mentor/lessons/update");
+    tracing::info!("  DELETE /api/mentor/lessons/delete");
+    tracing::info!("  POST /api/mentor/tasks/create");
+    tracing::info!("  PUT  /api/mentor/tasks/update");
+    tracing::info!("  DELETE /api/mentor/tasks/delete");
+    tracing::info!("  GET  /api/mentor/mentees/assigned");
+    tracing::info!("  GET  /api/mentor/mentees/detail");
+    tracing::info!("  POST /api/mentor/enroll");
+    tracing::info!("  GET  /api/mentor/submissions");
+    tracing::info!("  PUT  /api/mentor/submissions/review");
+    tracing::info!("  GET  /api/mentor/dashboard");
     Server::new(acceptor).serve(router).await;
 }
 
