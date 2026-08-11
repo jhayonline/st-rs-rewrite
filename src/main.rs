@@ -7,9 +7,13 @@ mod services;
 mod utils;
 
 use config::Config;
+use controllers::admin::{
+    create_user, delete_user, get_mentor_assignments, get_mentors, get_stats, get_users,
+    update_mentor_assignments, update_user,
+};
 use controllers::auth::{login, me, signup};
 use controllers::user::{change_password, get_profile, update_profile};
-use middleware::auth::AuthMiddleware;
+use middleware::auth::{AuthMiddleware, RequireRole};
 use middleware::cors::cors_handler;
 use migration::{Migrator, MigratorTrait};
 use salvo::prelude::*;
@@ -38,36 +42,43 @@ async fn main() {
 
     let db = Arc::new(db_connection);
 
+    // Create the router
     let router = Router::new()
         .hoop(cors_handler())
         .hoop(affix_state::inject(db.clone()))
         .hoop(affix_state::inject(config.clone()))
         .push(
             Router::with_path("api")
-                // pub
+                // public
                 .push(
                     Router::with_path("auth")
                         .push(Router::with_path("login").post(login))
                         .push(Router::with_path("signup").post(signup)),
                 )
-                // proc
+                // protected
                 .push(
                     Router::with_path("auth")
-                        .push(Router::with_path("me").get(me).hoop(AuthMiddleware::new()))
+                        .hoop(AuthMiddleware::new())
+                        .push(Router::with_path("me").get(me))
+                        .push(Router::with_path("profile").get(get_profile))
+                        .push(Router::with_path("profile").put(update_profile))
+                        .push(Router::with_path("change-password").post(change_password)),
+                )
+                // admin
+                .push(
+                    Router::with_path("admin")
+                        .hoop(AuthMiddleware::new())
+                        .hoop(RequireRole::new(vec!["Admin"]))
+                        .push(Router::with_path("users").post(get_users))
+                        .push(Router::with_path("users/create").post(create_user))
+                        .push(Router::with_path("users/update").put(update_user))
+                        .push(Router::with_path("users/delete").delete(delete_user))
+                        .push(Router::with_path("stats").get(get_stats))
+                        .push(Router::with_path("mentors").get(get_mentors))
+                        .push(Router::with_path("mentor-assignments").get(get_mentor_assignments))
                         .push(
-                            Router::with_path("profile")
-                                .get(get_profile)
-                                .hoop(AuthMiddleware::new()),
-                        )
-                        .push(
-                            Router::with_path("profile")
-                                .put(update_profile)
-                                .hoop(AuthMiddleware::new()),
-                        )
-                        .push(
-                            Router::with_path("change-password")
-                                .post(change_password)
-                                .hoop(AuthMiddleware::new()),
+                            Router::with_path("mentor-assignments/update")
+                                .put(update_mentor_assignments),
                         ),
                 )
                 .push(Router::with_path("hello").get(hello)),
@@ -89,6 +100,14 @@ async fn main() {
     tracing::info!("  GET  /api/auth/profile");
     tracing::info!("  PUT  /api/auth/profile");
     tracing::info!("  POST /api/auth/change-password");
+    tracing::info!("  POST /api/admin/users");
+    tracing::info!("  POST /api/admin/users/create");
+    tracing::info!("  PUT  /api/admin/users/update");
+    tracing::info!("  DELETE /api/admin/users/delete");
+    tracing::info!("  GET  /api/admin/stats");
+    tracing::info!("  GET  /api/admin/mentors");
+    tracing::info!("  GET  /api/admin/mentor-assignments");
+    tracing::info!("  PUT  /api/admin/mentor-assignments/update");
     Server::new(acceptor).serve(router).await;
 }
 

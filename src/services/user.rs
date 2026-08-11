@@ -4,7 +4,7 @@ use crate::utils::error::ApiError;
 use crate::utils::validation;
 
 use bcrypt::{DEFAULT_COST, hash, verify};
-use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection, EntityTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection};
 use std::sync::Arc;
 
 pub struct UserService;
