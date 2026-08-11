@@ -10,6 +10,12 @@ pub struct UpdateProfileRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct UserResponse {
     pub id: i32,
     pub email: String,

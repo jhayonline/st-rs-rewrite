@@ -8,6 +8,8 @@ mod utils;
 
 use config::Config;
 use controllers::auth::{login, me, signup};
+use controllers::user::{change_password, get_profile, update_profile};
+use middleware::auth::AuthMiddleware;
 use middleware::cors::cors_handler;
 use migration::{Migrator, MigratorTrait};
 use salvo::prelude::*;
@@ -42,11 +44,31 @@ async fn main() {
         .hoop(affix_state::inject(config.clone()))
         .push(
             Router::with_path("api")
+                // pub
                 .push(
                     Router::with_path("auth")
                         .push(Router::with_path("login").post(login))
-                        .push(Router::with_path("signup").post(signup))
-                        .push(Router::with_path("me").get(me)),
+                        .push(Router::with_path("signup").post(signup)),
+                )
+                // proc
+                .push(
+                    Router::with_path("auth")
+                        .push(Router::with_path("me").get(me).hoop(AuthMiddleware::new()))
+                        .push(
+                            Router::with_path("profile")
+                                .get(get_profile)
+                                .hoop(AuthMiddleware::new()),
+                        )
+                        .push(
+                            Router::with_path("profile")
+                                .put(update_profile)
+                                .hoop(AuthMiddleware::new()),
+                        )
+                        .push(
+                            Router::with_path("change-password")
+                                .post(change_password)
+                                .hoop(AuthMiddleware::new()),
+                        ),
                 )
                 .push(Router::with_path("hello").get(hello)),
         );
@@ -60,7 +82,13 @@ async fn main() {
         config.server_host,
         config.server_port
     );
-    tracing::info!("API endpoints available at /api/auth/login, /api/auth/signup, /api/auth/me");
+    tracing::info!("API endpoints available:");
+    tracing::info!("  POST /api/auth/login");
+    tracing::info!("  POST /api/auth/signup");
+    tracing::info!("  GET  /api/auth/me");
+    tracing::info!("  GET  /api/auth/profile");
+    tracing::info!("  PUT  /api/auth/profile");
+    tracing::info!("  POST /api/auth/change-password");
     Server::new(acceptor).serve(router).await;
 }
 
